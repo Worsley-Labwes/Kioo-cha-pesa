@@ -1,4 +1,4 @@
-# Kioo cha Pesa — M-Pesa Statement Decoder
+# Kioo cha Pesa: M-Pesa Statement Decoder
 
 A client-side React + Vite app that decodes M-Pesa SMS messages or statement CSVs into
 spending insights: category breakdown, fees paid, top places & people, a daily spending
