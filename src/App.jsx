@@ -10,6 +10,7 @@ import Board from './components/Board'
 import Heat from './components/Heat'
 import Spark from './components/Spark'
 import Table from './components/Table'
+import Compare from './components/Compare'
 import { CE, K } from './lib/constants'
 
 const PH = 'Paste your M-Pesa SMS messages or a statement CSV here…\n\nQJ12AB34CD Confirmed. Ksh500.00 sent to JANE DOE 0712345678 on 5/10/26 at 2:15 PM. New M-PESA balance is Ksh1,200.00. Transaction cost, Ksh7.00.'
@@ -18,6 +19,20 @@ const monthKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 const monthLabel = key => {
   const [year, month] = key.split('-').map(Number)
   return new Date(year, month - 1, 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
+}
+const previousMonth = key => {
+  const [year, month] = key.split('-').map(Number)
+  return monthKey(new Date(year, month - 2, 1))
+}
+const periodTotals = (txs, ex) => {
+  const out = txs.filter(t => t.dir === 'out')
+  const categories = {}
+  out.forEach(t => { categories[t.cat] = (categories[t.cat] || 0) + t.amt })
+  return {
+    spent: out.reduce((sum, t) => sum + t.amt, 0),
+    fees: txs.reduce((sum, t) => sum + (t.fee || 0), 0) + ex.reduce((sum, row) => sum + row.amt, 0),
+    cats: Object.entries(categories).sort((a, b) => b[1] - a[1]),
+  }
 }
 
 export default function App() {
@@ -64,6 +79,20 @@ export default function App() {
   const ex = d ? (period === 'all' ? d.ex : d.ex.filter(t => monthKey(t.d) === period)) : []
   const a = d ? analyse(tx, ex) : null
   const [leadCat, leadAmount] = a?.cats[0] || ['Other', 0]
+  const previousKey = period !== 'all' ? previousMonth(period) : null
+  const previousTx = previousKey ? d.tx.filter(t => monthKey(t.d) === previousKey) : []
+  const previousEx = previousKey ? d.ex.filter(row => monthKey(row.d) === previousKey) : []
+  const previous = previousTx.length || previousEx.length ? periodTotals(previousTx, previousEx) : null
+  const comparisonDates = d ? [...d.tx, ...d.ex].map(row => row.d).sort((x, y) => x - y) : []
+  const firstDate = comparisonDates[0]
+  const lastDate = comparisonDates[comparisonDates.length - 1]
+  const isPartialMonth = key => {
+    if (!firstDate || !lastDate) return false
+    const [year, month] = key.split('-').map(Number)
+    const firstPartial = key === monthKey(firstDate) && firstDate.getDate() > 1
+    const lastPartial = key === monthKey(lastDate) && lastDate.getDate() < new Date(year, month, 0).getDate()
+    return firstPartial || lastPartial
+  }
 
   return (
     <>
@@ -138,6 +167,15 @@ export default function App() {
                 <b>No outgoing payments in this period</b>
                 <span>Incoming transfers and transaction details are still shown below.</span>
               </div>
+            )}
+            {period !== 'all' && (
+              <Compare
+                current={{ spent: a.spent, fees: a.fees, cats: a.cats }}
+                previous={previous}
+                currentLabel={monthLabel(period)}
+                previousLabel={monthLabel(previousKey)}
+                partial={isPartialMonth(period) || isPartialMonth(previousKey)}
+              />
             )}
             <div className="stats">
               <Stat i={0} l="Money in" v={a.got} c="var(--g)" s="everything you received" />
